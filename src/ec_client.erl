@@ -181,44 +181,45 @@ query_string([{Name, Value} | T], Separator, Acc) ->
 
 % http://erlyaws.svn.sourceforge.net/viewvc/erlyaws/trunk/yaws/src/yaws_api.erl
 url_encode([H|T]) ->
-    if
-        H >= $a, $z >= H ->
-            [H|url_encode(T)];
-        H >= $A, $Z >= H ->
-            [H|url_encode(T)];
-        H >= $0, $9 >= H ->
-            [H|url_encode(T)];
-        H == $_; H == $.; H == $-; H == $/; H == $: ->
-            [H|url_encode(T)];
-        H == $& ->
-            [$%, $2, $6 | url_encode(T)];
-        H == $= ->
-            [$%, $3, $D | url_encode(T)];
-        H == $? ->
-            [$%, $3, $F | url_encode(T)];
-        H == $\  ->
-            [$%, $2, $0 | url_encode(T)];
-        H == $' ->
-            [$%, $2, $7 | url_encode(T)];
-        H == $" ->
-            [$%, $2, $2 | url_encode(T)];
-        H == $\\ ->
-            [$%, $5, $C | url_encode(T)];
-        H == $( ->
-            [$%, $2, $8 | url_encode(T)];
-        H == $) ->
-            [$%, $2, $9 | url_encode(T)];
-        H == $@ ->
-            [$%, $4, $0 | url_encode(T)];
-        true ->
-            case erlang:list_to_integer([H], 16) of
-                [X, Y] ->
-                    [$%, X, Y | url_encode(T)];
-                [X] ->
-                    [$%, $0, X | url_encode(T)]
-            end
-     end;
-
+  edoc_lib:escape_uri([H|T]);
+%    if
+%        H >= $a, $z >= H ->
+%            [H|url_encode(T)];
+%        H >= $A, $Z >= H ->
+%            [H|url_encode(T)];
+%        H >= $0, $9 >= H ->
+%            [H|url_encode(T)];
+%        H == $_; H == $.; H == $-; H == $/; H == $: ->
+%            [H|url_encode(T)];
+%        H == $& ->
+%            [$%, $2, $6 | url_encode(T)];
+%        H == $= ->
+%            [$%, $3, $D | url_encode(T)];
+%        H == $? ->
+%            [$%, $3, $F | url_encode(T)];
+%        H == $\  ->
+%            [$%, $2, $0 | url_encode(T)];
+%        H == $' ->
+%            [$%, $2, $7 | url_encode(T)];
+%        H == $" ->
+%            [$%, $2, $2 | url_encode(T)];
+%        H == $\\ ->
+%            [$%, $5, $C | url_encode(T)];
+%        H == $( ->
+%            [$%, $2, $8 | url_encode(T)];
+%        H == $) ->
+%            [$%, $2, $9 | url_encode(T)];
+%        H == $@ ->
+%            [$%, $4, $0 | url_encode(T)];
+%        true ->
+%            case erlang:list_to_integer([H], 16) of
+%                [X, Y] ->
+%                    [$%, X, Y | url_encode(T)];
+%                [X] ->
+%                    [$%, $0, X | url_encode(T)]
+%            end
+%     end;
+%
 url_encode([]) ->
     [].
 

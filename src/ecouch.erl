@@ -427,78 +427,78 @@ view_access(DatabaseName, DesignName, ViewName) ->
 %% @hidden
 
 view_access(DatabaseName, DesignName, ViewName, Options) ->
-    Path = lists:flatten(io_lib:format("/~s/_design/~s/_view/~s", [DatabaseName, DesignName, ViewName])),
-    Reply =
-        case proplists:lookup(keys, Options) of
-            none ->
-                gen_server:call(ec_listener, {get, Path, Options}, ?DEFAULT_TIMEOUT);
-            {keys, _Keys} = Data ->
-                JsonKeys = rfc4627:encode({obj, [Data]}),
-                NewOptions = proplists:delete(keys, Options),
-                gen_server:call(ec_listener, {post, Path, JsonKeys, NewOptions}, ?DEFAULT_TIMEOUT)
-        end,
-    handle_reply(Reply).
+  Path = lists:flatten(io_lib:format("/~s/_design/~s/_view/~s", [DatabaseName, DesignName, ViewName])),
+  Reply = case proplists:lookup(keys, Options) of
+    {keys, _Keys} = Data ->
+      JsonKeys = rfc4627:encode({obj, [Data]}),
+      NewOptions = proplists:delete(keys, Options),
+      gen_server:call(ec_listener, {post, Path, JsonKeys, NewOptions}, ?DEFAULT_TIMEOUT);
+    none ->
+      NewOptions = lists:foldl(fun({Key, Value}, Result) when Key == startkey; Key == endkey; Key == key -> lists:append([{Key,rfc4627:encode(Value)}], Result); (KV, Result) -> lists:append([KV], Result)  end, [], Options),
+    gen_server:call(ec_listener, {get, Path, NewOptions}, ?DEFAULT_TIMEOUT)
+end,
+handle_reply(Reply).
 
 %% @spec url_get(Path::string(), Options::options()) -> {ok, Response::json()} | {error, Reason::term()}
 %%
 %% @doc Get URL for generic url calls, used for specialized http handlers like _fti
 
 url_get(Path, Options) ->
-    Reply = gen_server:call(ec_listener, {get, Path, Options}, ?DEFAULT_TIMEOUT),
-    handle_reply(Reply).
+  Reply = gen_server:call(ec_listener, {get, Path, Options}, ?DEFAULT_TIMEOUT),
+  handle_reply(Reply).
 
 %% @spec url_post(Path::string(), Data::string(), Options::options()) -> {ok, Response::json()} | {error, Reason::term()}
 %%
 %% @doc POST URL for generic url POST calls, used for specialized http handlers like _fti
 
 url_post(Path, Data) ->
-    Reply = gen_server:call(ec_listener, {post, Path, Data}, ?DEFAULT_TIMEOUT),
-    handle_reply(Reply).
+  Reply = gen_server:call(ec_listener, {post, Path, Data}, ?DEFAULT_TIMEOUT),
+  handle_reply(Reply).
 
 %% @spec url_put(Path::string(), Data::string(), Options::options()) -> {ok, Response::json()} | {error, Reason::term()}
 %%
 %% @doc Pur URL for generic url PUT calls, used for specialized http handlers like _fti
 
 url_put(Path, Data) ->
-    Reply = gen_server:call(ec_listener, {put, Path, Data}, ?DEFAULT_TIMEOUT),
-    handle_reply(Reply).
+  Reply = gen_server:call(ec_listener, {put, Path, Data}, ?DEFAULT_TIMEOUT),
+  handle_reply(Reply).
 
 %% @spec url_get(Path::string(), Options::options()) -> {ok, Response::json()} | {error, Reason::term()}
 %%
 %% @doc DELETE URL for generic url DELETE calls, used for specialized http handlers
 
 url_delete(Path, Options) ->
-    Reply = gen_server:call(ec_listener, {delete, Path, Options}, ?DEFAULT_TIMEOUT),
-    handle_reply(Reply).
+  Reply = gen_server:call(ec_listener, {delete, Path, Options}, ?DEFAULT_TIMEOUT),
+  handle_reply(Reply).
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
 
 handle_reply(Reply) ->
-    case Reply of
+  case Reply of
+    {error, Reason} ->
+      {error, Reason};
+    R ->
+      case rfc4627:decode(R) of
+        {ok, Json, _Raw} ->
+          {ok, Json};
         {error, Reason} ->
-            {error, Reason};
-        R ->
-              case rfc4627:decode(R) of
-                  {ok, Json, _Raw} ->
-                      {ok, Json};
-                  {error, Reason} ->
-                      {error, Reason}
-              end
-    end.
+          {error, Reason}
+      end
+  end.
 
 get_app_opt(Opt, Default) ->
-    Value = case application:get_application() of
-        {ok, Application} -> application:get_env(Application, Opt);
-        _ -> undefined
-        end,
-    case Value of
-        {ok, Val} -> Val;
-        _ ->
-            case init:get_argument(Opt) of
-                [[Val | _]] -> Val;
-                error -> Default
-            end
-        end.
+  Value = case application:get_application() of
+    {ok, Application} -> application:get_env(Application, Opt);
+    _ -> undefined
+  end,
+  case Value of
+    {ok, Val} -> Val;
+    _ ->
+      case init:get_argument(Opt) of
+        [[Val | _]] -> Val;
+        error -> Default
+      end
+  end.
 

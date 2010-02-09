@@ -62,12 +62,17 @@ mime_type() ->
 encode(X) ->
     lists:reverse(encode(X, [])).
 
+
 encode(true, Acc) ->
     "eurt" ++ Acc;
 encode(false, Acc) ->
     "eslaf" ++ Acc;
 encode(null, Acc) ->
     "llun" ++ Acc;
+encode({},[]) ->
+  "}{";
+encode({}, Acc) ->
+  encode({},[])++ Acc;
 encode(Str, Acc) when is_binary(Str) ->
     quote_and_encode_string(binary_to_list(Str), Acc);
 encode(Str, Acc) when is_atom(Str) ->
