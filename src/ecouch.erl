@@ -24,7 +24,7 @@
 %% @doc
 %% <h1>Elang API to CouchDb</h1>
 %% eCouch is an application that provides an API to a CouchDb server
-%% It uses the <a href="http://www.lshift.net/blog/2007/02/17/json-and-json-rpc-for-erlang">rfc4627</a> module from <a href="http://www.lshift.net/">LShift</a>
+%% It uses the <a href="http://www.lshift.net/blog/2007/02/17/json-and-json-rpc-for-erlang">json</a> module from <a href="http://www.lshift.net/">LShift</a>
 %% The design was inspired in the article <a href="http://www.trapexit.org/Building_a_Non-blocking_TCP_server_using_OTP_principles">Building a Non-blocking TCP server using OTP principles</a>
 %% and assumes that <a href="http://www.erlang.org/doc/apps/inets/index.html">inets</a> application is running.
 %% todo:
@@ -230,11 +230,11 @@ db_list() ->
 
 %% @spec db_info(DatabaseName::string()) -> {ok, Info::json()} | {error, Reason::term()}
 %%
-%% @type json() = obj() | array() | num() | str() | true | false | null
-%% @type obj() = {obj, [{key(), val()}]}
+%% @type json() = struct() | array() | num() | str() | true | false | null
+%% @type struct() = {struct, [{key(), val()}]}
 %% @type array() = [val()]
 %% @type key() = str() | atom()
-%% @type val() = obj() | array() | num() | str() | true | false | null
+%% @type val() = struct() | array() | num() | str() | true | false | null
 %% @type num() = int() | float()
 %% @type str() = bin()
 %%
@@ -250,7 +250,7 @@ db_info(DatabaseName) ->
 %% @doc Create document
 
 doc_create(DatabaseName, Doc) ->
-    DocJson = rfc4627:encode(Doc),
+  DocJson = json:encode(Doc),
     Path = lists:flatten(io_lib:format("/~s/", [DatabaseName])),
     Reply = gen_server:call(ec_listener, {post, Path, DocJson}, ?DEFAULT_TIMEOUT),
     handle_reply(Reply).
@@ -258,7 +258,7 @@ doc_create(DatabaseName, Doc) ->
 %% @hidden
 
 doc_create(_DatabaseName, DocName, _Options) when DocName == "" ->
-    {ok, {obj, [{"error", <<"not_created">>},
+    {ok, {struct, [{"error", <<"not_created">>},
                 {"reason", <<"invalid_name">>}]}};
 
 %% @spec doc_create(DatabaseName::string(), DocName::string(), Doc::json()) -> {ok, Response::json()} | {error, Reason::term()}
@@ -266,7 +266,7 @@ doc_create(_DatabaseName, DocName, _Options) when DocName == "" ->
 %% @doc Create a named document
 
 doc_create(DatabaseName, DocName, Doc) ->
-    JsonDoc = rfc4627:encode(Doc),
+    JsonDoc = json:encode(Doc),
     Path = lists:flatten(io_lib:format("/~s/~s", [DatabaseName, DocName])),
     Reply = gen_server:call(ec_listener, {put, Path, JsonDoc}, ?DEFAULT_TIMEOUT),
     handle_reply(Reply).
@@ -277,7 +277,7 @@ doc_create(DatabaseName, DocName, Doc) ->
 %% @doc Batch create a set of documents.
 
 doc_bulk_create(DatabaseName, DocList) ->
-    BulkDoc = rfc4627:encode({obj, [{"docs", DocList}]}),
+    BulkDoc = json:encode({struct, [{"docs", DocList}]}),
     Path = lists:flatten(io_lib:format("/~s/~s", [DatabaseName, "_bulk_docs"])),
     Reply = gen_server:call(ec_listener, {post, Path, BulkDoc}, ?DEFAULT_TIMEOUT),
     handle_reply(Reply).
@@ -300,7 +300,7 @@ doc_bulk_update(DatabaseName, DocListRev) ->
 %% @hidden
 
 doc_delete(_DatabaseName, DocName, _Rev) when DocName == "" ->
-    {ok, {obj, [{"error", <<"not_deleted">>},
+    {ok, {struct, [{"error", <<"not_deleted">>},
                 {"reason", <<"invalid_name">>}]}};
 
 %% @spec doc_delete(DatabaseName::string(), DocName::string(), Rev::string()) -> {ok, Response::json()} | {error, Reason::term()}
@@ -318,7 +318,7 @@ doc_delete(DatabaseName, DocName, Rev) ->
 %% @doc Batch delete a set of documents.
 
 doc_bulk_delete(DatabaseName, DocList) ->
-    BulkDoc = rfc4627:encode({obj, [{"docs", [{obj, [{"_deleted", true} | D]} || {obj,D} <- DocList]}]}),
+    BulkDoc = json:encode({struct, [{"docs", [{struct, [{"_deleted", true} | D]} || {struct,D} <- DocList]}]}),
     Path = lists:flatten(io_lib:format("/~s/~s", [DatabaseName, "_bulk_docs"])),
     Reply = gen_server:call(ec_listener, {post, Path, BulkDoc}, ?DEFAULT_TIMEOUT),
     handle_reply(Reply).
@@ -333,7 +333,7 @@ doc_get(DatabaseName, DocName) ->
 %% @hidden
 
 doc_get(_DatabaseName, DocName, _Options) when DocName == "" ->
-    {ok, {obj, [{"error", <<"not_found">>},
+    {ok, {struct, [{"error", <<"not_found">>},
                 {"reason", <<"invalid_name">>}]}};
 
 %% @spec doc_get(DatabaseName::string(), DocName::string(), Options::options()) -> {ok, Response::json()} | {error, Reason::term()}
@@ -363,7 +363,7 @@ doc_get_all(DatabaseName, Options) ->
             none ->
                 gen_server:call(ec_listener, {get, Path, Options}, ?DEFAULT_TIMEOUT);
             {keys, _Keys} = Data ->
-                JsonKeys = rfc4627:encode({obj, [Data]}),
+                JsonKeys = json:encode({struct, [Data]}),
                 NewOptions = proplists:delete(keys, Options),
                 gen_server:call(ec_listener, {post, Path, JsonKeys, NewOptions}, ?DEFAULT_TIMEOUT)
         end,
@@ -372,7 +372,7 @@ doc_get_all(DatabaseName, Options) ->
 %% @hidden
 
 view_create(DatabaseName, DesignName, Views) ->
-    JsonDoc = rfc4627:encode({obj, [{language, <<"javascript">>},
+    JsonDoc = json:encode({struct, [{language, <<"javascript">>},
                                     {views, Views}]}),
     Path = lists:flatten(io_lib:format("/~s/_design/~s", [DatabaseName, DesignName])),
     Reply = gen_server:call(ec_listener, {put, Path, JsonDoc}, ?DEFAULT_TIMEOUT),
@@ -430,13 +430,17 @@ view_access(DatabaseName, DesignName, ViewName, Options) ->
   Path = lists:flatten(io_lib:format("/~s/_design/~s/_view/~s", [DatabaseName, DesignName, ViewName])),
   Reply = case proplists:lookup(keys, Options) of
     {keys, _Keys} = Data ->
-      JsonKeys = rfc4627:encode({obj, [Data]}),
+      JsonKeys = mochijson2:encode({struct, [Data]}),
       NewOptions = proplists:delete(keys, Options),
       gen_server:call(ec_listener, {post, Path, JsonKeys, NewOptions}, ?DEFAULT_TIMEOUT);
     none ->
-      NewOptions = lists:foldl(fun({Key, Value}, Result) when Key == startkey; Key == endkey; Key == key -> lists:append([{Key,rfc4627:encode(Value)}], Result); (KV, Result) -> lists:append([KV], Result)  end, [], Options),
-    gen_server:call(ec_listener, {get, Path, NewOptions}, ?DEFAULT_TIMEOUT)
-end,
+      NewOptions = lists:foldl(
+        fun({Key, Value}, Result) when Key == startkey; Key == endkey; Key == key ->
+          lists:append([{Key,mochijson2:encode(Value)}], Result);
+        (KV, Result) ->
+          lists:append([KV], Result)  end, [], Options),
+          gen_server:call(ec_listener, {get, Path, NewOptions}, ?DEFAULT_TIMEOUT)
+        end,
 handle_reply(Reply).
 
 %% @spec url_get(Path::string(), Options::options()) -> {ok, Response::json()} | {error, Reason::term()}
@@ -480,11 +484,11 @@ handle_reply(Reply) ->
     {error, Reason} ->
       {error, Reason};
     R ->
-      case rfc4627:decode(R) of
-        {ok, Json, _Raw} ->
-          {ok, Json};
-        {error, Reason} ->
-          {error, Reason}
+      case catch json:decode(R) of
+        {'EXIT', Reason} ->
+          {error, Reason};
+        Json ->
+          {ok, Json}
       end
   end.
 

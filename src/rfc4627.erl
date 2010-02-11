@@ -155,20 +155,32 @@ encode_number(Num, Acc) when is_float(Num) ->
     lists:reverse(float_to_list(Num), Acc).
 
 decode(Bin) when is_binary(Bin) ->
-    decode(binary_to_list(Bin));
+  decode(binary_to_list(Bin));
+%  case unicode:characters_to_list(Bin,utf8,utf8) of
+%    Bin ->
+%      decode(binary_to_list(unicode:characters_to_binary(Bin,utf8,latin1)));
+%    _ ->
+%  end;
 decode(Chars) ->
-    case catch parse(skipws(Chars)) of
-	{'EXIT', Reason} ->
-	    %% Reason is usually far too much information, but helps
-	    %% if needing to debug this module.
-	    {error, Reason};
-	{Value, Remaining} ->
-	    {ok, Value, skipws(Remaining)}
-    end.
+  case catch parse(skipws(Chars)) of
+    {'EXIT', Reason} ->
+      %% Reason is usually far too much information, but helps
+      %% if needing to debug this module.
+      {error, Reason};
+    {Value, Remaining} ->
+      {ok, Value, skipws(Remaining)}
+  end.
 
 parse([$" | Rest]) -> %% " emacs balancing
-    {Str, Rest1} = parse_string(Rest, []),
-    {list_to_binary(Str), Rest1};
+  {Str, Rest1} = parse_string(Rest, []),
+  case catch {list_to_binary(Str), Rest1} of
+    {'EXIT', _} ->
+      Value = string:join(lists:foldl(fun(C,Acc) -> [unicode:characters_to_list(<<C>>,utf8)|Acc] end, "",lists:reverse(Str)),""),
+      io:format("Parsing ~s~n",[Value]),
+      {Value, []};
+    {_Str, Rest2} ->
+      {_Str, Rest2}
+  end; 
 parse("true" ++ Rest) -> {true, Rest};
 parse("false" ++ Rest) -> {false, Rest};
 parse("null" ++ Rest) -> {null, Rest};
@@ -177,16 +189,16 @@ parse([$[ | Rest]) -> parse_array(skipws(Rest), []);
 parse(Chars) -> parse_number(Chars, []).
 
 skipws([X | Rest]) when X =< 32 ->
-    skipws(Rest);
+  skipws(Rest);
 skipws(Chars) ->
-    Chars.
+  Chars.
 
 parse_string([$" | Rest], Acc) -> %% " emacs balancing
-    {lists:reverse(Acc), Rest};
+  {lists:reverse(Acc), Rest};
 parse_string([$\\, Key | Rest], Acc) ->
-    parse_general_char(Key, Rest, Acc);
+  parse_general_char(Key, Rest, Acc);
 parse_string([X | Rest], Acc) ->
-    parse_string(Rest, [X | Acc]).
+  parse_string(Rest, [X | Acc]).
 
 parse_general_char($b, Rest, Acc) -> parse_string(Rest, [8 | Acc]);
 parse_general_char($t, Rest, Acc) -> parse_string(Rest, [9 | Acc]);
@@ -197,10 +209,10 @@ parse_general_char($/, Rest, Acc) -> parse_string(Rest, [$/ | Acc]);
 parse_general_char($\\, Rest, Acc) -> parse_string(Rest, [$\\ | Acc]);
 parse_general_char($", Rest, Acc) -> parse_string(Rest, [$" | Acc]);
 parse_general_char($u, [D0, D1, D2, D3 | Rest], Acc) ->
-    parse_string(Rest, [(digit_hex(D0) bsl 12) +
-			(digit_hex(D1) bsl 8) +
-			(digit_hex(D2) bsl 4) +
-			(digit_hex(D3)) | Acc]).
+  parse_string(Rest, [(digit_hex(D0) bsl 12) +
+      (digit_hex(D1) bsl 8) +
+      (digit_hex(D2) bsl 4) +
+      (digit_hex(D3)) | Acc]).
 
 digit_hex($0) -> 0;
 digit_hex($1) -> 1;
@@ -228,61 +240,61 @@ digit_hex($e) -> 14;
 digit_hex($f) -> 15.
 
 finish_number(Acc, Rest) ->
-    Str = lists:reverse(Acc),
-    {case catch list_to_integer(Str) of
-	 {'EXIT', _} -> list_to_float(Str);
-	 Value -> Value
-     end, Rest}.
+  Str = lists:reverse(Acc),
+  {case catch list_to_integer(Str) of
+      {'EXIT', _} -> list_to_float(Str);
+      Value -> Value
+    end, Rest}.
 
 parse_number([], _Acc) ->
-    exit(syntax_error);
+  exit(syntax_error);
 parse_number([$- | Rest], Acc) ->
-    parse_number1(Rest, [$- | Acc]);
+  parse_number1(Rest, [$- | Acc]);
 parse_number(Rest, Acc) ->
-    parse_number1(Rest, Acc).
+  parse_number1(Rest, Acc).
 
 parse_number1(Rest, Acc) ->
-    {Acc1, Rest1} = parse_int_part(Rest, Acc),
-    case Rest1 of
-	[] -> finish_number(Acc1, []);
-	[$. | More] ->
-            {Acc2, Rest2} = parse_int_part(More, [$. | Acc1]),
-            parse_exp(Rest2, Acc2, false);
-        _ ->
-            parse_exp(Rest1, Acc1, true)
-    end.
+  {Acc1, Rest1} = parse_int_part(Rest, Acc),
+  case Rest1 of
+    [] -> finish_number(Acc1, []);
+    [$. | More] ->
+      {Acc2, Rest2} = parse_int_part(More, [$. | Acc1]),
+      parse_exp(Rest2, Acc2, false);
+    _ ->
+      parse_exp(Rest1, Acc1, true)
+  end.
 
 parse_int_part(Chars = [_Ch | _Rest], Acc) ->
-    parse_int_part0(Chars, Acc).
+  parse_int_part0(Chars, Acc).
 
 parse_int_part0([], Acc) ->
-    {Acc, []};
+  {Acc, []};
 parse_int_part0([Ch | Rest], Acc) ->
-    case is_digit(Ch) of
-	true -> parse_int_part0(Rest, [Ch | Acc]);
-	false -> {Acc, [Ch | Rest]}
-    end.
+  case is_digit(Ch) of
+    true -> parse_int_part0(Rest, [Ch | Acc]);
+    false -> {Acc, [Ch | Rest]}
+  end.
 
 parse_exp([$e | Rest], Acc, NeedFrac) ->
-    parse_exp1(Rest, Acc, NeedFrac);
+  parse_exp1(Rest, Acc, NeedFrac);
 parse_exp([$E | Rest], Acc, NeedFrac) ->
-    parse_exp1(Rest, Acc, NeedFrac);
+  parse_exp1(Rest, Acc, NeedFrac);
 parse_exp(Rest, Acc, _NeedFrac) ->
-    finish_number(Acc, Rest).
+  finish_number(Acc, Rest).
 
 parse_exp1(Rest, Acc, NeedFrac) ->
-    {Acc1, Rest1} = parse_signed_int_part(Rest, if
-						    NeedFrac -> [$e, $0, $. | Acc];
-						    true -> [$e | Acc]
-						end),
-    finish_number(Acc1, Rest1).
+  {Acc1, Rest1} = parse_signed_int_part(Rest, if
+      NeedFrac -> [$e, $0, $. | Acc];
+      true -> [$e | Acc]
+    end),
+  finish_number(Acc1, Rest1).
 
 parse_signed_int_part([$+ | Rest], Acc) ->
-    parse_int_part(Rest, [$+ | Acc]);
+  parse_int_part(Rest, [$+ | Acc]);
 parse_signed_int_part([$- | Rest], Acc) ->
-    parse_int_part(Rest, [$- | Acc]);
+  parse_int_part(Rest, [$- | Acc]);
 parse_signed_int_part(Rest, Acc) ->
-    parse_int_part(Rest, Acc).
+  parse_int_part(Rest, Acc).
 
 is_digit($0) -> true;
 is_digit($1) -> true;
@@ -297,45 +309,45 @@ is_digit($9) -> true;
 is_digit(_) -> false.
 
 parse_object([$} | Rest], Acc) ->
-    {{obj, lists:reverse(Acc)}, Rest};
+  {{obj, lists:reverse(Acc)}, Rest};
 parse_object([$, | Rest], Acc) ->
-    parse_object(skipws(Rest), Acc);
+  parse_object(skipws(Rest), Acc);
 parse_object([$" | Rest], Acc) -> %% " emacs balancing
-    {Key, Rest1} = parse_string(Rest, []),
-    [$: | Rest2] = skipws(Rest1),
-    {Value, Rest3} = parse(skipws(Rest2)),
-    parse_object(skipws(Rest3), [{Key, Value} | Acc]).
+  {Key, Rest1} = parse_string(Rest, []),
+  [$: | Rest2] = skipws(Rest1),
+  {Value, Rest3} = parse(skipws(Rest2)),
+  parse_object(skipws(Rest3), [{Key, Value} | Acc]).
 
 parse_array([$] | Rest], Acc) ->
-    {lists:reverse(Acc), Rest};
+  {lists:reverse(Acc), Rest};
 parse_array([$, | Rest], Acc) ->
-    parse_array(skipws(Rest), Acc);
+  parse_array(skipws(Rest), Acc);
 parse_array(Chars, Acc) ->
-    {Value, Rest} = parse(Chars),
-    parse_array(skipws(Rest), [Value | Acc]).
+  {Value, Rest} = parse(Chars),
+  parse_array(skipws(Rest), [Value | Acc]).
 
 from_record(R, _RName, Fields) ->
-    {obj, encode_record_fields(R, 2, Fields)}.
+  {obj, encode_record_fields(R, 2, Fields)}.
 
 encode_record_fields(_R, _Index, []) ->
-    [];
+  [];
 encode_record_fields(R, Index, [Field | Rest]) ->
-    case element(Index, R) of
-	undefined ->
-	    encode_record_fields(R, Index + 1, Rest);
-	Value ->
-	    [{atom_to_list(Field), Value} | encode_record_fields(R, Index + 1, Rest)]
-    end.
+  case element(Index, R) of
+    undefined ->
+      encode_record_fields(R, Index + 1, Rest);
+    Value ->
+      [{atom_to_list(Field), Value} | encode_record_fields(R, Index + 1, Rest)]
+  end.
 
 to_record({obj, Values}, Fallback, Fields) ->
-    list_to_tuple([element(1, Fallback) | decode_record_fields(Values, Fallback, 2, Fields)]).
+  list_to_tuple([element(1, Fallback) | decode_record_fields(Values, Fallback, 2, Fields)]).
 
 decode_record_fields(_Values, _Fallback, _Index, []) ->
-    [];
+  [];
 decode_record_fields(Values, Fallback, Index, [Field | Rest]) ->
-    [case lists:keysearch(atom_to_list(Field), 1, Values) of
-	 {value, {_, Value}} ->
-	     Value;
-	 false ->
-	     element(Index, Fallback)
-     end | decode_record_fields(Values, Fallback, Index + 1, Rest)].
+  [case lists:keysearch(atom_to_list(Field), 1, Values) of
+      {value, {_, Value}} ->
+        Value;
+      false ->
+        element(Index, Fallback)
+    end | decode_record_fields(Values, Fallback, Index + 1, Rest)].
